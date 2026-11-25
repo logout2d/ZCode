@@ -25,6 +25,7 @@ import type {
   PermissionResolvedPayload,
   PermissionDeniedPayload,
   ModelCompletePayload,
+  ModelSelectedPayload,
   SessionModeChangedPayload,
   TargetChangedPayload,
   TargetCompletionVerificationPayload,
@@ -55,6 +56,7 @@ import {
   applyStreamRecoveryAnchorCreated,
   applyStreamingToolLedgerUpdate,
   initialSessionProjection,
+  positiveInteger,
 } from "./event-reducer-helpers.js";
 
 function shouldModelCompleteUpdateContextUsed(payload: ModelCompletePayload): boolean {
@@ -105,6 +107,16 @@ export class EventReducer {
         createdAt: e.timestamp,
         updatedAt: e.timestamp,
         status: "idle" as SessionStatus,
+      };
+    },
+
+    [EventTypes.ModelSelected]: (p, e) => {
+      const payload = e.payload as ModelSelectedPayload;
+      const contextWindow = positiveInteger(payload.contextWindow);
+      return {
+        ...p,
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
+        updatedAt: e.timestamp,
       };
     },
 
@@ -221,9 +233,11 @@ export class EventReducer {
       // AI SDK v6 的 provider input 已经是 total input（含 cache read/write）；
       // 这里通过统一 helper 计算 context used，避免各处重复理解 cache breakdown。
       const contextUsed = getModelUsageContextTokens(payload.usage);
+      const contextWindow = positiveInteger(payload.contextWindow);
       return {
         ...p,
         ...(contextUsed !== undefined ? { contextUsed } : {}),
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
         updatedAt: e.timestamp,
       };
     },

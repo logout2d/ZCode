@@ -1,5 +1,6 @@
 import {
   SessionEventType,
+  getModelUsageContextTokens,
   type ModelUsageSummary,
   type SessionEvent,
   type TodoItem,
@@ -102,6 +103,7 @@ export function applySessionEventToState(
       break;
     case SessionEventType.ModelSelected:
       applyModelSelectedEvent(payload, handlers.setModel, handlers.setThoughtLevel);
+      applySessionCreatedEvent(payload, handlers.setContextUsage);
       break;
     case SessionEventType.ModelStreaming:
       applyModelStreamingEvent(payload, {
@@ -309,10 +311,20 @@ function applyModelCompleteEvent(
   const nextUsage = usageFromPayload(payload);
   if (nextUsage) {
     setUsage(nextUsage);
-    if (nextUsage.inputTokens > 0) {
+    const querySource = stringField(payload, "querySource");
+    const isMainTurn =
+      querySource !== undefined
+        ? querySource === "main_turn"
+        : stringField(payload, "stopReason") !== "tool_internal";
+
+    const contextUsed = getModelUsageContextTokens(nextUsage);
+
+    if (isMainTurn && contextUsed !== undefined) {
+      const contextWindow = contextWindowFromPayload(payload);
       setContextUsage((current) => ({
         ...current,
-        contextUsed: nextUsage.inputTokens,
+        contextUsed,
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
       }));
     }
   }
