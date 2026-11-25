@@ -21,7 +21,6 @@ import { QueuedInputPanel } from "./app-queued-inputs.js";
 import { ModeSuggestionPanel } from "./app-mode-suggestion-panel.js";
 import { ModelSuggestionPanel } from "./app-model-suggestion-panel.js";
 import { useMcpSidebarStatus } from "./app-mcp-status.js";
-import { useWorkspaceGitBranch } from "./app-workspace-git.js";
 import { Sidebar } from "./app-sidebar.js";
 import {
   type SidebarLayout,
@@ -52,6 +51,58 @@ const h = React.createElement as (
   props?: Record<string, unknown> | null,
   ...children: React.ReactNode[]
 ) => React.ReactElement;
+
+export const WORKSPACE_GIT_REFRESH_MS = 5000;
+
+export function useWorkspaceGitBranch(
+  initialBranch: string | undefined,
+  readBranch?: () => Promise<string | undefined>,
+): string | undefined {
+  const [branch, setBranch] = React.useState(initialBranch);
+
+  React.useEffect(() => {
+    if (!readBranch) {
+      setBranch(initialBranch);
+      return;
+    }
+
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const refresh = async () => {
+      if (disposed) return;
+
+      try {
+        const next = await readBranch();
+
+        if (!disposed) {
+          setBranch(next);
+        }
+      } catch {
+        if (!disposed) {
+          setBranch(undefined);
+        }
+      } finally {
+        if (!disposed) {
+          timer = setTimeout(() => {
+            void refresh();
+          }, WORKSPACE_GIT_REFRESH_MS);
+        }
+      }
+    };
+
+    void refresh();
+
+    return () => {
+      disposed = true;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    };
+  }, [initialBranch, readBranch]);
+
+  return branch;
+}
 
 export function AppView(props: {
   subagents?: SubagentsController;

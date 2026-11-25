@@ -8,7 +8,7 @@ import { testRender } from "@mbears/opentui-react/test-utils";
 import {
   useWorkspaceGitBranch,
   WORKSPACE_GIT_REFRESH_MS,
-} from "../src/app-workspace-git.js";
+} from "../src/app-view.js";
 
 const sleep = (ms: number) =>
   new Promise<void>(resolve => setTimeout(resolve, ms));
