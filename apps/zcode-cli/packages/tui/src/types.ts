@@ -319,6 +319,7 @@ export type TuiOptions = {
   version?: string;
   workspaceDirectory?: string;
   workspaceGitBranch?: string;
+  readWorkspaceGitBranch?: () => Promise<string | undefined>;
   noColor: boolean;
   stderr: NodeJS.WriteStream;
   stdin: NodeJS.ReadStream;

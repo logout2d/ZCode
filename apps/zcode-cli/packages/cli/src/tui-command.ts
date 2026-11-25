@@ -93,6 +93,10 @@ export const runTuiCommand = async (
         developerMode,
         version,
         workspaceDirectory,
+        readWorkspaceGitBranch: () =>
+          (deps.resolveWorkspaceGitBranch ?? resolveWorkspaceGitBranch)({
+            workspaceDirectory,
+          }).catch(() => undefined),
         noColor: options.noColor,
         readClipboardImage: deps.readClipboardImage ?? createNodeClipboardImageReader(),
         listModelOptions: promptHandler.listModelOptions,

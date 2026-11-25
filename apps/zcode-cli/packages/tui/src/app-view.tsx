@@ -18,6 +18,7 @@ import { QueuedInputPanel } from "./app-queued-inputs.js";
 import { ModeSuggestionPanel } from "./app-mode-suggestion-panel.js";
 import { ModelSuggestionPanel } from "./app-model-suggestion-panel.js";
 import { useMcpSidebarStatus } from "./app-mcp-status.js";
+import { useWorkspaceGitBranch } from "./app-workspace-git.js";
 import { Sidebar } from "./app-sidebar.js";
 import {
   type SidebarLayout,
@@ -98,6 +99,10 @@ export function AppView(props: {
   workflowCardsByToolCallId?: ReadonlyMap<string, TuiWorkflowCard>;
   expandedWorkflowRunIds?: ReadonlySet<string>;
 }): React.ReactElement {
+  const workspaceGitBranch = useWorkspaceGitBranch(
+    props.options.workspaceGitBranch,
+    props.options.readWorkspaceGitBranch,
+  );
   const readOnly = Boolean(props.subagents?.selected);
   const handleShellMouseUp = React.useCallback(() => {
     props.copyCurrentSelection();
@@ -156,7 +161,7 @@ export function AppView(props: {
         developerMode: props.options.developerMode,
         version: props.options.version,
         workspaceDirectory: props.options.workspaceDirectory,
-        workspaceGitBranch: props.options.workspaceGitBranch,
+        workspaceGitBranch,
         copy: props.copy,
       })
     : null;
