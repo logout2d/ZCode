@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import { describe, expect, it } from "vitest";
 import { EventReducer } from "../src/events/event-reducer.js";
 import {

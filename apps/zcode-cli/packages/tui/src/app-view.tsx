@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import type { ModelUsageSummary, TodoItem, TurnId } from "@zcode/contracts";
 import React from "react";
 import { ApprovalArea } from "./app-approval-panel.js";

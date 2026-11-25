@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import type { WorkflowRunProgressEnvelope } from "@zcode/shared/zcode-protocol-v4";
 import type { ModelSelection, ZCodeModelOption } from "@zcode/shared";
 import type {

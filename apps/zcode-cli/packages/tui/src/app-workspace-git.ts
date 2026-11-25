@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import { useEffect, useState } from "react";
 
 export const WORKSPACE_GIT_REFRESH_MS = 5000;

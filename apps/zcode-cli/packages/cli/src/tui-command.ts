@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import type { ToolSearchMode } from "@zcode/contracts";
 import type { RunContext, GlobalOptions } from "@zcode/shared-types";
 import { resolveZCodeRuntimeEnv, type DynamicWorkflowMode } from "@zcode/shared";

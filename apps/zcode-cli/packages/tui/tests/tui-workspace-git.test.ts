@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: context accounting or workspace Git branch refresh.
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import React, { act } from "react";
