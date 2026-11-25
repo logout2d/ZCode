@@ -84,3 +84,26 @@ App 业务单测已退役，不新增或恢复 App 业务单测 test/spec 或 `c
 - `info` 用于进程和会话生命周期、权限结果、一次性初始化等生产可用事件。
 - `warn` 用于可恢复异常；`error` 用于崩溃、握手失败、鉴权丢失等不可恢复错误。
 - 不在日志、示例或提交中写入凭据、真实用户数据和内部服务地址。
+
+## ZCode Custom fork
+
+This section supplements the upstream instructions.
+Preserve the upstream architecture and validation rules.
+
+- Read docs/custom/README.md and docs/custom/ROADMAP.md.
+- Read the relevant entry in docs/custom/BUGS.md.
+- Read the applicable upstream specifications before coding.
+- Use English for new fork-specific code and agent prompts,
+  and Russian for custom documentation.
+- Preserve upstream comments and required comment conventions.
+- Keep main as an unmodified upstream mirror.
+- Use custom/main as the custom integration branch.
+- Use task/* branches for new development.
+- Keep changes minimal and compatible with upstream updates.
+- Run required validation locally; do not bypass Git hooks.
+- Update the roadmap, bug registry and changelog.
+- Preserve applicable licenses and mark modified files.
+- Never commit credentials, private logs or session data.
+- Do not deploy or restart an active agent without authorization.
+- Distinguish source fixes, test evidence and deployed behavior.
+- Report unverified assumptions and incomplete validation.
