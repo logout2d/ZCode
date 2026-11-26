@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: invalidate detached runtime event callbacks.
+
 // TUI 常驻会话事件中继。
 //
 // 单独成模块是为了让「换 app 时重挂」这条性质可被直接单测：若埋在 tui-prompt-handler
@@ -28,18 +31,24 @@ export function createTuiSessionEventRelay(input: {
 }): TuiSessionEventRelay {
   const sinks = new Set<(event: SessionEvent) => void>();
   let detachCurrent: (() => void) | undefined;
+  let subscriptionGeneration = 0;
 
   const detach = (): void => {
-    detachCurrent?.();
+    // 先使旧回调失效，再解除订阅，避免迟到事件进入新会话。
+    subscriptionGeneration += 1;
+    const unsubscribe = detachCurrent;
     detachCurrent = undefined;
+    unsubscribe?.();
   };
 
   const reattach = (): void => {
     detach();
     if (sinks.size === 0) return;
     const subscribe = input.readSubscriber(input.currentRuntime());
+    const generation = subscriptionGeneration;
     detachCurrent = subscribe?.({
       onSessionEvent: (event) => {
+        if (generation !== subscriptionGeneration) return;
         // 直接遍历 Set：JS 的 Set 迭代对「遍历中删除」是安全的（已删未访问的条目会被跳过），
         // 所以 sink 在回调里退订不会破坏本次扇出，也不该再收到这一条。
         for (const sink of sinks) sink(event);

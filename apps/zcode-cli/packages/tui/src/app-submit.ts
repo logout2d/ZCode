@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: preserve active streaming for local command results.
+
 import type { SessionEvent, TurnId } from "@zcode/contracts";
 import type { ModelSelection } from "@zcode/shared";
 import type React from "react";
@@ -34,7 +37,10 @@ let localUserMessageSequence = 0;
 export function appendAgentResult(
   current: Message[],
   result: TuiSubmitPromptResult,
-  options: { workspaceDirectory?: string } = {},
+  options: {
+    workspaceDirectory?: string;
+    preserveTurnState?: boolean;
+  } = {},
 ): Message[] {
   // resume 回放以前只保留 content/role，导致已持久化的 reasoning/tool
   // part 被初始渲染丢掉；这里恢复成 TUI 结构化 parts，继续复用实时流式组件。
@@ -45,7 +51,10 @@ export function appendAgentResult(
     : result.resetSessionProjection
       ? []
       : current;
-  const finalized = finalizeStreamProjectedMessages(restored);
+  // Local commands must not finalize an active model stream.
+  const finalized = options.preserveTurnState
+    ? restored
+    : finalizeStreamProjectedMessages(restored);
   if (!result.restoredMessages && projectedTranscriptHasResponse(finalized, result.response)) {
     return finalized;
   }

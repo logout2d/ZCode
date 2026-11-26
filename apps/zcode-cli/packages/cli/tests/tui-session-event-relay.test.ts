@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-05 session isolation regression coverage.
+
 // TUI 常驻会话事件中继：换 app 时必须重挂（docs/dynamic-workflow/launch.md「The inline card」）。
 //
 // 这条性质的失效是安静的：/new、/resume、/fork 之后订阅还挂在旧 runtime 上，TUI 就再也收不到
@@ -150,4 +153,54 @@ test("a sink unsubscribing during fan-out does not break the dispatch", () => {
   assert.deepEqual(seen, ["a:e1", "b:e1"]);
   only.state.emit(event("e2"));
   assert.deepEqual(seen, ["a:e1", "b:e1", "b:e2"]);
+});
+
+// Modified for the logout2d ZCode fork.
+test("BUG-05C: ignores late callbacks from detached runtime subscriptions", () => {
+  const first = fakeRuntime("first");
+  const second = fakeRuntime("second");
+
+  let current: unknown = first.runtime;
+
+  const relay = createTuiSessionEventRelay({
+    currentRuntime: () => current,
+    readSubscriber,
+  });
+
+  const received: string[] = [];
+
+  const unsubscribe = relay.addSink((e) => {
+    received.push(e.id);
+  });
+
+  const lateFirstCallback = first.state.emit;
+
+  first.state.emit(event("first-valid"));
+
+  current = second.runtime;
+  relay.reattach();
+
+  const lateSecondCallback = second.state.emit;
+
+  second.state.emit(event("second-valid"));
+
+  // A previously captured callback may execute after unsubscribe.
+  lateFirstCallback(event("first-stale"));
+
+  assert.deepEqual(received, [
+    "first-valid",
+    "second-valid",
+  ]);
+
+  // Detaching the relay must also invalidate captured callbacks.
+  relay.detach();
+
+  lateSecondCallback(event("second-stale"));
+
+  assert.deepEqual(received, [
+    "first-valid",
+    "second-valid",
+  ]);
+
+  unsubscribe();
 });

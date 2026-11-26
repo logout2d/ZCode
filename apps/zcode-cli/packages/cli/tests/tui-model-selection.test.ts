@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-05 session isolation regression coverage.
+
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -548,5 +551,64 @@ test("terminal picker refreshes an empty catalog and switches model and effort w
     terminal.renderer.destroy();
     if (previousActEnvironment === undefined) delete reactEnvironment.IS_REACT_ACT_ENVIRONMENT;
     else reactEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+  }
+});
+
+// Modified for the logout2d ZCode fork.
+test("BUG-05A: active-turn session commands remain local", async () => {
+  let appCreations = 0;
+
+  const deps = {
+    env: {},
+    cwd: () => process.cwd(),
+    skipUserConfig: true,
+    loadDotenv: () => ({
+      keys: [],
+      loaded: false,
+      path: "",
+    }),
+    createZCodeApp: async () => {
+      appCreations++;
+      throw new Error("Session command must not reach runtime");
+    },
+    startProcessProviderRegistryRuntime: async () => ({
+      runtime: { registryService: {} },
+      dispose() {},
+    }),
+  } as unknown as RunDependencies;
+
+  const handler = createTuiSubmitPrompt(
+    deps,
+    createCliModeState(),
+    "test",
+  );
+
+  try {
+    for (const text of [
+      "/new",
+      "/clear",
+      "/resume",
+      "/resume historical-session",
+      "/fork",
+      "/fork latest",
+    ]) {
+      const result = await handler.sendInput!(text, {});
+
+      assert.equal(result.kind, "command_result", text);
+
+      if (result.kind !== "command_result") {
+        assert.fail("Expected a local command result");
+      }
+
+      assert.match(result.result.response, /active turn/i);
+      assert.equal(
+        result.result.resetSessionProjection,
+        undefined,
+      );
+    }
+
+    assert.equal(appCreations, 0);
+  } finally {
+    await handler.close?.();
   }
 });
