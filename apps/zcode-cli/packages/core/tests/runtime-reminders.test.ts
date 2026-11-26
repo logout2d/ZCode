@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-06A todo reminder regression coverage.
+
 import { describe, expect, it } from "vitest";
 import { createSessionId, type ModelMessageContent } from "@zcode/contracts";
 import {
@@ -474,9 +477,9 @@ describe("runtime request reminders", () => {
       "The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.";
     expect(buildTodoReminderBody([])).toBe(`${paragraph}\n`);
     expect(
-      buildTodoReminderBody([{ content: "Review changes", status: "pending", priority: "high" }]),
+      buildTodoReminderBody([{ content: "Review changes", status: "completed", priority: "high" }]),
     ).toBe(
-      `${paragraph}\n\n\nHere are the existing contents of your todo list:\n\n[1. [pending] Review changes]`,
+      `${paragraph}\n\n\nHere are the existing contents of your todo list:\n\n[1. [completed] Review changes]`,
     );
   });
 
@@ -501,8 +504,8 @@ describe("runtime request reminders", () => {
     expect(body).toContain("1. [in_progress] Review prompt trajectory output");
     expect(body).not.toContain("<system-reminder>");
     expect(body).toContain("The TodoWrite tool hasn't been used recently.");
-    expect(body).toContain("Only use it if it's relevant to the current work.");
-    expect(body).toContain("ignore if not applicable");
+    expect(body).toContain("Reconcile the todo list with your actual progress before continuing.");
+    expect(body).not.toContain("ignore if not applicable");
     expect(body).toContain("Here are the existing contents of your todo list:");
     expect(body).not.toContain("Current session todo state (authoritative):");
     expect(body).not.toContain("source=");
@@ -825,5 +828,86 @@ describe("runtime request reminders", () => {
       content:
         "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is 2026-06-28.\n</system-reminder>\n",
     });
+  });
+});
+
+// ZCode Custom regression: BUG-06A.
+describe("BUG-06A: active todo reconciliation", () => {
+  it("preserves the upstream reminder for an empty list", () => {
+    const body = buildTodoReminderBody([]);
+
+    expect(body).toContain("This is just a gentle reminder");
+    expect(body).toContain("ignore if not applicable");
+    expect(body).not.toContain("Reconcile the todo list");
+  });
+
+  it("preserves the upstream reminder for a completed list", () => {
+    const body = buildTodoReminderBody([
+      {
+        content: "Finished implementation",
+        status: "completed",
+        priority: "high",
+      },
+    ]);
+
+    expect(body).toContain("This is just a gentle reminder");
+    expect(body).toContain("1. [completed] Finished implementation");
+    expect(body).not.toContain("Reconcile the todo list");
+  });
+
+  it("requires reconciliation when pending tasks exist", () => {
+    const body = buildTodoReminderBody([
+      {
+        content: "Run verification",
+        status: "pending",
+        priority: "high",
+      },
+    ]);
+
+    expect(body).toContain("Reconcile the todo list");
+    expect(body).toContain("TodoWrite");
+    expect(body).not.toContain("ignore if not applicable");
+    expect(body).toContain("1. [pending] Run verification");
+  });
+
+  it("requires reconciliation when a task is in progress", () => {
+    const body = buildTodoReminderBody([
+      {
+        content: "Implement changes",
+        status: "in_progress",
+        priority: "high",
+      },
+    ]);
+
+    expect(body).toContain("Reconcile the todo list");
+    expect(body).toContain("before continuing");
+    expect(body).not.toContain("ignore if not applicable");
+  });
+
+  it("preserves mixed statuses and prevents artificial completion", () => {
+    const body = buildTodoReminderBody([
+      {
+        content: "Audit infrastructure",
+        status: "completed",
+        priority: "high",
+      },
+      {
+        content: "Implement changes",
+        status: "in_progress",
+        priority: "high",
+      },
+      {
+        content: "Run tests",
+        status: "pending",
+        priority: "medium",
+      },
+    ]);
+
+    expect(body).toContain("acceptance criteria");
+    expect(body).toContain("Do not rewrite an unchanged list");
+    expect(body).toContain("1. [completed] Audit infrastructure");
+    expect(body).toContain("2. [in_progress] Implement changes");
+    expect(body).toContain("3. [pending] Run tests");
+    expect(body).not.toContain("ignore if not applicable");
   });
 });

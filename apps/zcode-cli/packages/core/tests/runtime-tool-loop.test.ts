@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-06A provider reminder integration coverage.
+
 import { withoutAgentListingMessages } from "./test-agent-listing.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTestModelSelection } from "./test-model-selection.js";
@@ -6023,12 +6026,30 @@ describe("AgentRuntime tool loop", () => {
 
     expect(dueRequestText).toContain("The TodoWrite tool hasn't been used recently.");
     expect(dueRequestText).toContain("1. [in_progress] Review prompt trajectory output");
+
+    // BUG-06A: active plan reconciliation reaches the model request.
+    expect(dueRequestText).toContain(
+      "Reconcile the todo list with your actual progress before continuing.",
+    );
+    expect(dueRequestText).toContain(
+      "Do not rewrite an unchanged list merely to acknowledge this reminder.",
+    );
+    expect(dueRequestText).not.toContain("ignore if not applicable");
+
     expect(dueRequestText).not.toContain("Current session todo state (authoritative):");
     expect(dueRequestText.match(/The TodoWrite tool hasn't been used recently\./g)).toHaveLength(1);
     expect(nextRequestText.match(/The TodoWrite tool hasn't been used recently\./g)).toHaveLength(
       1,
     );
     expect(persistedTodoReminders).toHaveLength(1);
+
+    expect(persistedTodoReminders[0]?.text).toContain(
+      "Reconcile the todo list with your actual progress before continuing.",
+    );
+    expect(persistedTodoReminders[0]?.text).not.toContain(
+      "ignore if not applicable",
+    );
+
     expect(persistedTodoReminders[0]?.text).toContain(
       "The TodoWrite tool hasn't been used recently.",
     );
@@ -6236,6 +6257,33 @@ describe("AgentRuntime tool loop", () => {
       await firstRuntime.executeTurn(`first runtime ${index}`);
     }
 
+
+    // BUG-06A: an existing upstream reminder must remain unchanged
+    // when the session later has an unfinished todo list.
+    const originalReminders = (
+      await sessionStore.messages({ sessionID: sessionId })
+    )
+      .flatMap((message) => message.parts)
+      .filter((part) => part.type === "text" && part.synthetic)
+      .filter((part) => part.metadata?.runtimeMessage?.source === "todo_reminder");
+
+    expect(originalReminders).toHaveLength(1);
+
+    const originalBody = originalReminders[0]!.text;
+
+    expect(originalBody).toContain("ignore if not applicable");
+
+    await sessionStore.updateTodos({
+      sessionID: sessionId,
+      todos: [
+        {
+          content: "Continue unfinished implementation",
+          priority: "high",
+          status: "in_progress",
+        },
+      ],
+    });
+
     const resumeRequests: any[][] = [];
     const secondRuntime = createTestAgentRuntime(
       sessionId,
@@ -6273,6 +6321,13 @@ describe("AgentRuntime tool loop", () => {
       1,
     );
     expect(persistedTodoReminders).toHaveLength(1);
+
+    expect(persistedTodoReminders[0]?.text).toBe(originalBody);
+    expect(resumeRequestText).toContain(originalBody.trim());
+    expect(resumeRequestText).not.toContain(
+      "Reconcile the todo list with your actual progress before continuing.",
+    );
+
   });
 
   it("marks the active goal complete when the post-turn verifier passes", async () => {

@@ -1,3 +1,5 @@
+<!-- Modified for the logout2d ZCode fork: BUG-06A. -->
+
 # Meta User Context
 
 ## Silent-turn reminder
@@ -95,6 +97,30 @@ The reminder paragraph ends with one newline. An empty list adds nothing; a
 non-empty list adds two more newlines, the existing list heading, two newlines,
 and numbered items inside brackets. Provider projection preserves this body for
 both MCS and user-side reminder delivery.
+
+### ZCode Custom — Active todo reconciliation (BUG-06A)
+
+When the persisted session todo list contains pending or in-progress
+items, a due todo reminder must explicitly instruct the model to
+reconcile the list with actual work before continuing.
+
+The model should update changed task statuses through TodoWrite,
+including transitions between implementation stages. Completion must
+be based on actual acceptance criteria, never inferred solely from
+tool activity.
+
+An unchanged list must not be rewritten solely to acknowledge
+a reminder.
+
+Empty and fully completed todo lists retain the upstream reminder
+paragraph. Existing cadence thresholds, list formatting, session
+ownership, persistence and provider projection remain unchanged.
+
+No forced tool calls, additional model requests, automatic status
+transitions or independent timers are introduced.
+
+Previously persisted reminders must replay unchanged on resume.
+Only newly generated reminders use the custom wording.
 
 ## Total-tokens reminder
 

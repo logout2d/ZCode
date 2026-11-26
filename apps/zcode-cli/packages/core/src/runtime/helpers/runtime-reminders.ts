@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-06A active todo reconciliation.
+
 import {
   legacySyntheticRuntimeMetadata,
   systemReminderRuntimeMetadata,
@@ -264,8 +267,24 @@ export function shouldBuildTodoReminder(entries: readonly RuntimeMessageEntry[])
 }
 
 export function buildTodoReminderBody(todos: readonly TodoItem[]): string {
+  // 未完成的任务需要核对实际进度，而不是忽略提醒。
+  const hasUnfinishedTodos = todos.some(
+    (todo) => todo.status === "pending" || todo.status === "in_progress",
+  );
   const lines = [
-    "The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.",
+    hasUnfinishedTodos
+      ? [
+          "The TodoWrite tool hasn't been used recently.",
+          "Your current task list contains unfinished work.",
+          "Reconcile the todo list with your actual progress before continuing.",
+          "Use TodoWrite to update task statuses when your progress or scope has changed.",
+          "Update active tasks when moving between implementation stages.",
+          "Mark tasks as completed only when their acceptance criteria are satisfied.",
+          "Keep unfinished tasks pending or in progress.",
+          "Do not rewrite an unchanged list merely to acknowledge this reminder.",
+          "Continue executing the user's task after reconciling the plan.",
+        ].join(" ")
+      : "The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.",
     "",
   ];
   if (todos.length > 0) {
