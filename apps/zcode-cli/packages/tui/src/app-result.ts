@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: preserve active turn state and current metadata.
+
 import type { CollaborationMode, ModelUsageSummary, TodoItem, TurnId } from "@zcode/contracts";
 import { getZCodeCopy } from "@zcode/i18n";
 import React from "react";
@@ -51,15 +54,22 @@ export function useTuiApplyResult(input: TuiApplyResultInput) {
   return React.useCallback(
     (result: TuiSubmitPromptResult, preserveTurnState = false) => {
       const resultCopy = getZCodeCopy(result.locale ?? input.fallback.locale).tui;
-      input.setMode(result.mode ?? input.fallback.mode);
-      input.setModel(result.model ?? input.fallback.model);
+      if (result.mode !== undefined || !preserveTurnState) {
+        input.setMode(result.mode ?? input.fallback.mode);
+      }
+      if (result.model !== undefined || !preserveTurnState) {
+        input.setModel(result.model ?? input.fallback.model);
+      }
       if (result.locale) input.setLocale(result.locale);
       if (result.loginRequired !== undefined) input.setLoginRequired(result.loginRequired);
       if (result.effortOptions) input.setEffortOptions(result.effortOptions);
       if (result.modelOptions) input.setModelOptions(result.modelOptions);
       if ("thoughtLevel" in result) input.setThoughtLevel(result.thoughtLevel ?? "");
       input.setMessages((current) =>
-        appendAgentResult(current, result, { workspaceDirectory: input.workspaceDirectory }),
+        appendAgentResult(current, result, {
+          workspaceDirectory: input.workspaceDirectory,
+          preserveTurnState,
+        }),
       );
       if (preserveTurnState) {
         input.setStatus("Agent is still responding.");
@@ -77,6 +87,8 @@ export function useTuiApplyResult(input: TuiApplyResultInput) {
         }));
       }
       if (result.resetSessionProjection) {
+        // 会话切换时不能保留上一会话的回合标识。
+        input.setActiveTurnId(undefined);
         input.setUsage(undefined);
         input.setContextUsage({});
         input.setCacheStats(undefined);

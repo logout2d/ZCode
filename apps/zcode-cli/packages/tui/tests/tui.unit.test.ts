@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-05 session isolation regression coverage.
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionEventType, type SessionEvent } from "@zcode/contracts";
@@ -806,3 +809,180 @@ function sessionEvent(type: SessionEventType, payload: unknown): SessionEvent {
     type,
   } as SessionEvent;
 }
+
+// Modified for the logout2d ZCode fork.
+test("BUG-05A.2: local command result preserves active streaming", () => {
+  const activeMessage: Message = {
+    id: "active-assistant",
+    content: "Partial response",
+    role: "agent",
+    streamProjected: true,
+    streaming: true,
+  };
+
+  const result = appendAgentResult(
+    [activeMessage],
+    {
+      response: "Cannot switch sessions during an active turn.",
+    },
+    {
+      preserveTurnState: true,
+    },
+  );
+
+  assert.deepEqual(result[0], activeMessage);
+  assert.equal(result[0]?.streaming, true);
+  assert.equal(result.length, 2);
+  assert.match(result[1]?.content ?? "", /active turn/);
+
+  const completed = appendAgentResult(
+    [activeMessage],
+    { response: "" },
+  );
+
+  assert.equal(completed[0]?.streaming, false);
+});
+
+test("BUG-05B: local commands preserve state and new sessions reset it", async () => {
+  const React = await import("react");
+  const { createTestRenderer } = await import("@mbears/opentui-core/testing");
+  const { createRoot } = await import("@mbears/opentui-react");
+  const { useTuiApplyResult } = await import("../src/app-result.js");
+
+  type Input = Parameters<typeof useTuiApplyResult>[0];
+  type ApplyResult = ReturnType<typeof useTuiApplyResult>;
+
+  const calls = new Map<string, unknown[]>();
+
+  const record = (name: string) => (value: unknown) => {
+    calls.set(name, [...(calls.get(name) ?? []), value]);
+  };
+
+  const modifiedFileToolCallIds = new Set(["old-tool-call"]);
+
+  const input: Input = {
+    fallback: {
+      locale: "en-US",
+      loginRequired: false,
+      mode: "build",
+      model: "stale/model",
+    },
+    modifiedFileToolCallIds,
+    setActiveTurnId: record("activeTurnId"),
+    setCacheStats: record("cache"),
+    setContextUsage: record("context"),
+    setEffortOptions: record("effortOptions"),
+    setLastEvent: record("lastEvent"),
+    setLiveModelText: record("liveText"),
+    setLocale: record("locale"),
+    setLoginRequired: record("loginRequired"),
+    setMessages: record("messages"),
+    setMode: record("mode"),
+    setModel: record("model"),
+    setModelOptions: record("modelOptions"),
+    setModifiedFiles: record("modifiedFiles"),
+    setNetworkRequests: record("network"),
+    setQueuedInputs: record("queue"),
+    setSelection: record("selection"),
+    setStatus: record("status"),
+    setThoughtLevel: record("thought"),
+    setTodos: record("todos"),
+    setTraceId: record("traceId"),
+    setUsage: record("usage"),
+  };
+
+  let applyResult: ApplyResult | undefined;
+
+  function Harness() {
+    applyResult = useTuiApplyResult(input);
+    return null;
+  }
+
+  const environment = globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  };
+
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = true;
+
+  const terminal = await createTestRenderer({
+    width: 100,
+    height: 30,
+    targetFps: 30,
+    screenMode: "alternate-screen",
+    useThread: false,
+  });
+
+  const root = createRoot(terminal.renderer);
+
+  try {
+    await React.act(() => {
+      root.render(React.createElement(Harness));
+    });
+
+    assert.ok(applyResult);
+
+    // A local warning must not alter active session state.
+    applyResult({
+      response: "Cannot switch sessions during an active turn.",
+    }, true);
+
+    for (const key of [
+      "activeTurnId", "cache", "context", "liveText",
+      "mode", "model", "modifiedFiles", "network",
+      "queue", "todos", "traceId", "usage", "thought",
+    ]) {
+      assert.equal(calls.has(key), false, `${key} was modified`);
+    }
+
+    assert.equal(modifiedFileToolCallIds.size, 1);
+
+    // Explicit configuration commands must still update metadata.
+    calls.clear();
+
+    applyResult({
+      response: "Model switched.",
+      model: "new/model",
+      thoughtLevel: "high",
+    }, true);
+
+    assert.deepEqual(calls.get("model"), ["new/model"]);
+    assert.deepEqual(calls.get("thought"), ["high"]);
+    assert.equal(calls.has("todos"), false);
+    assert.equal(calls.has("queue"), false);
+    assert.equal(calls.has("context"), false);
+
+    // Successful session replacement must reset session projection.
+    calls.clear();
+
+    applyResult({
+      response: "Started new session session-new.",
+      sessionId: "session-new",
+      resetSessionProjection: true,
+    });
+
+    assert.deepEqual(calls.get("todos"), [[]]);
+    assert.deepEqual(calls.get("context"), [{}]);
+    assert.deepEqual(calls.get("queue"), [[]]);
+    assert.deepEqual(calls.get("network"), [[]]);
+    assert.deepEqual(calls.get("modifiedFiles"), [[]]);
+    assert.deepEqual(calls.get("usage"), [undefined]);
+    assert.deepEqual(calls.get("cache"), [undefined]);
+    assert.deepEqual(calls.get("traceId"), [undefined]);
+    assert.deepEqual(calls.get("liveText"), [""]);
+    assert.equal(modifiedFileToolCallIds.size, 0);
+
+    // The previous turn identity must not survive a session reset.
+    assert.deepEqual(calls.get("activeTurnId"), [undefined]);
+
+  } finally {
+    await React.act(() => root.unmount());
+    terminal.renderer.destroy();
+
+    if (previous === undefined) {
+      delete environment.IS_REACT_ACT_ENVIRONMENT;
+    } else {
+      environment.IS_REACT_ACT_ENVIRONMENT = previous;
+    }
+  }
+});

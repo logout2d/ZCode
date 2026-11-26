@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: active-turn session command routing.
+
 import type { ToolSearchMode } from "@zcode/contracts";
 import { getDefaultConfigPath, updateUiLocaleInFileConfig } from "@zcode/adapters/config";
 import type { SessionEvent } from "@zcode/contracts";
@@ -346,6 +349,18 @@ export function createTuiSubmitPrompt(
   submitPrompt.sendInput = async (input, options) => {
     // Model/effort changes configure subsequent requests, including during an active turn.
     const command = parseSlashCommand(typeof input === "string" ? input : input.text);
+    // Session switches must not enter the active-turn input queue.
+    if (
+      command?.type === "known" &&
+      ["new", "resume", "fork"].includes(command.name)
+    ) {
+      return {
+        kind: "command_result",
+        result: {
+          response: "Cannot switch sessions during an active turn. Wait for completion or interrupt the turn first.",
+        },
+      };
+    }
     if (command?.type === "known" && (command.name === "model" || command.name === "effort")) {
       return {
         kind: "command_result",

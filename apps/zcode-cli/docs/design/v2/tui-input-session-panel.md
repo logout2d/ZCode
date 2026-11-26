@@ -1,3 +1,5 @@
+<!-- Modified for the logout2d ZCode fork. -->
+
 # TUI Input Session Panel
 
 ## Goal
@@ -98,3 +100,35 @@ larger session metadata panel is implemented.
   input frame.
 - Composer tests assert the status line is passed into the prompt input while
   idle and while a turn is active.
+
+## ZCode Custom — Session isolation (BUG-05)
+
+The following rules apply to the custom CLI/TUI session lifecycle:
+
+- Session-switch commands (`/new`, `/clear`, `/resume`, `/fork`)
+  submitted during an active turn must remain local commands.
+  They must not be forwarded as model input or queued for execution.
+- Session switching during an active turn is rejected without
+  interrupting the active turn.
+- Local command results must preserve active streaming and
+  session-local state.
+- Explicit model and reasoning changes remain supported during
+  active turns.
+- Local command results without model or mode metadata must not
+  overwrite the current selection with fallback values.
+- A successful session projection reset clears the previous
+  active turn identity together with the existing session-local
+  projection state.
+- Detached runtime subscriptions must reject callbacks belonging
+  to an obsolete subscription generation.
+- Existing session event identity filtering remains unchanged.
+- Session replacement must not delete persisted history or todos
+  belonging to the previous session.
+- Existing workspace-scoped configuration, permissions and input
+  history retain their original ownership.
+
+Regression coverage includes active-turn command routing,
+stream preservation, projection reset, detached callbacks,
+and independent runtime persistence with cold resume.
+
+Live CLI acceptance remains a separate verification step.

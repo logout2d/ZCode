@@ -1,3 +1,6 @@
+// Modified for the logout2d ZCode fork.
+// Changes: BUG-05 session isolation regression coverage.
+
 import { readLogEntries } from "./session-persistence-fixture.js";
 import {
   chmod,
@@ -2803,3 +2806,170 @@ function createMemoryWritable(): NodeJS.WritableStream & { output(): string } {
   stream.output = () => output;
   return stream;
 }
+
+// Modified for the logout2d ZCode fork.
+it("BUG-05B.3: isolates fresh sessions and restores previous session state", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "zcode-custom-session-reset-"));
+  const dbPath = join(tempRoot, "session.sqlite");
+
+  const sessionA = createSessionId("bug05-session-a");
+  const sessionB = createSessionId("bug05-session-b");
+
+  const markerA = "BUG05_PRIVATE_HISTORY_ALPHA";
+  const markerB = "BUG05_PRIVATE_HISTORY_BRAVO";
+
+  const todosA = [
+    {
+      content: "BUG05_PRIVATE_TODO_ALPHA",
+      priority: "high" as const,
+      status: "in_progress" as const,
+    },
+  ];
+
+  const todosB = [
+    {
+      content: "BUG05_PRIVATE_TODO_BRAVO",
+      priority: "medium" as const,
+      status: "pending" as const,
+    },
+  ];
+
+  const requests: string[] = [];
+
+  const createApp = async (
+    sessionId: ReturnType<typeof createSessionId>,
+    resume = false,
+  ) => {
+    const sessionStore = await createSqliteSessionStore({ dbPath });
+
+    try {
+      const app = await createZCodeApp({
+        env: { ZCODE_STORAGE_DIR: tempRoot },
+        modelExecutor: {
+          async generateText(request: { messages: unknown }) {
+            requests.push(JSON.stringify(request.messages));
+
+            return {
+              finishReason: "stop",
+              text: "Test response",
+              usage: {
+                inputTokens: 1,
+                outputTokens: 1,
+                totalTokens: 2,
+              },
+            };
+          },
+        } as never,
+        providerRegistry: createTestProviderRegistry([
+          { providerId: "zai", modelId: "glm-4.7" },
+        ]),
+        runtimeConfig: {
+          workingDirectory: tempRoot,
+          mode: "yolo",
+        },
+        sessionId,
+        sessionStore,
+        resume,
+        skipUserConfig: true,
+      });
+
+      return { app, sessionStore };
+    } catch (error) {
+      sessionStore.close();
+      throw error;
+    }
+  };
+
+  const close = async (
+    current: Awaited<ReturnType<typeof createApp>>,
+  ) => {
+    try {
+      await current.app.close();
+    } finally {
+      current.sessionStore.close();
+    }
+  };
+
+  try {
+    const a = await createApp(sessionA);
+
+    try {
+      expect(a.app.sessionId).toBe(sessionA);
+      await a.app.submitPrompt(markerA);
+
+      await a.sessionStore.updateTodos({
+        sessionID: sessionA,
+        todos: todosA,
+      });
+
+      expect(await a.sessionStore.readTodos({
+        sessionID: sessionA,
+      })).toEqual(todosA);
+
+      expect(requests.at(-1)).toContain(markerA);
+    } finally {
+      await close(a);
+    }
+
+    requests.length = 0;
+
+    const b = await createApp(sessionB);
+
+    try {
+      expect(b.app.sessionId).toBe(sessionB);
+      expect(b.app.sessionId).not.toBe(sessionA);
+
+      expect(await b.sessionStore.readTodos({
+        sessionID: sessionB,
+      })).toEqual([]);
+
+      await b.app.submitPrompt(markerB);
+
+      expect(requests.length).toBeGreaterThan(0);
+      expect(requests.join("\n")).toContain(markerB);
+      expect(requests.join("\n")).not.toContain(markerA);
+      expect(requests.join("\n")).not.toContain(todosA[0].content);
+
+      expect(await b.sessionStore.readTodos({
+        sessionID: sessionA,
+      })).toEqual(todosA);
+
+      await b.sessionStore.updateTodos({
+        sessionID: sessionB,
+        todos: todosB,
+      });
+    } finally {
+      await close(b);
+    }
+
+    requests.length = 0;
+
+    const restored = await createApp(sessionA, true);
+
+    try {
+      await restored.app.resume();
+
+      expect(restored.app.sessionId).toBe(sessionA);
+
+      expect(await restored.sessionStore.readTodos({
+        sessionID: sessionA,
+      })).toEqual(todosA);
+
+      expect(await restored.sessionStore.readTodos({
+        sessionID: sessionB,
+      })).toEqual(todosB);
+
+      await restored.app.submitPrompt("Continue session A");
+
+      expect(requests.length).toBeGreaterThan(0);
+      expect(requests.join("\n")).toContain(markerA);
+      expect(requests.join("\n")).not.toContain(markerB);
+      expect(requests.join("\n")).not.toContain(todosB[0].content);
+
+    } finally {
+      await close(restored);
+    }
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
